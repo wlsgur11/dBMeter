@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sound Meter dB</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #ffffff; 
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh; 
+        }
+        .upload-section {
+           margin-top :50px ;
+           text-align: center;
+       }
+       input[type="file"] {
+           padding :10px ;
+           border :none ;
+           border-radius :5px ;  
+           cursor:pointer ; 
+       }
+       p{
+          font-size :20px ;
+          font-weight:bold ;
+      }
+      h1{
+         position:absolute; 
+         left :10px ;  
+         top :10px ;   
+     }
+
+     #description-text { /* Apply styles to the description text */
+         text-align:center ; 
+         font-size :20px ; 
+         color:#333333; 
+         line-height: 1.5; 
+     }
+
+     button.description-button { 
+        margin-bottom :20px ; 
+        padding :10px 20px ;  
+        border:none ;
+        border-radius :5px ;  
+    }
+
+
+    #graph-container {
+       width:auto;
+       height:auto;
+       position:relative ;
+
+    }
+    @media (max-width: 600px) {
+        body {
+            font-size: 18px;
+        }
+        
+        h1 {
+            font-size: 24px;
+        }
+
+        #description-text { 
+            font-size :16px ; 
+        }
+
+        button.description-button { 
+            padding :15px 30px ;  
+        }
+
+        .upload-section p{
+           font-size :18px ;
+       }
+
+       input[type="file"] {
+           padding :15px ;
+       }
+       
+       #average, #max {
+           font-size: 24px;
+       }
+    }
+
+ </style>
+
+</head>
+
+<body>
+<div class="container">
+    <h1>Sound Meter dB</h1>
+
+    <button class="description-button">Description</button>
+
+<p id="description-text" style="display:none;">This page provides approximate values.
+<br>If you need precise measurements, please use appropriate equipment.
+<br>(F5) Every Analyze
+</p>
+
+<div class="upload-section">
+<p>Upload the file you want to analyze.</p>
+<p>less than 10sec plz :)</p>
+<input type="file" id="audioFile" accept=".wav,.mp3,.m4a">
+</div>
+
+
+<p id="average"></p>
+<p id="max"></p>
+
+<div class ="graph-section">
+
+<div id='graph-container'>
+<canvas id='graph'></canvas> <!-- Graph -->
+</div>
+
+</div>
+
+
+<script>
+
+"use strict";
+
+document.querySelector(".description-button").addEventListener("click", function() {
+let descriptionText = document.getElementById("description-text");
+if (descriptionText.style.display === "none") { // If description is hidden
+   descriptionText.style.display = "block"; // Show it
+} else { // If description is visible
+   descriptionText.style.display = "none"; // Hide it
+} 
+});
+
+let audioContext = new (window.AudioContext || window.webkitAudioContext)();
+let analyser = audioContext.createAnalyser();
+analyser.fftSize = 2048;
+let bufferLength = analyser.frequencyBinCount;
+let dataArray = new Uint8Array(bufferLength);
+
+document.getElementById('audioFile').addEventListener('change', function(evt) {
+let file = evt.target.files[0];
+let reader = new FileReader();
+
+reader.onloadend = function(e) {
+    audioContext.decodeAudioData(e.target.result).then(function(buffer) {
+        let sourceNode = audioContext.createBufferSource();
+        sourceNode.buffer = buffer;
+        sourceNode.connect(analyser);
+        sourceNode.start(0);
+
+        // Calculate the width of the canvas based on the duration of the audio clip
+        var scaleFactor=100;  
+       var canvasWidth=buffer.duration*scaleFactor;
+
+       var canvas=document.getElementById('graph');
+       
+       // Set the width of the canvas based on the duration of the audio clip  
+       canvas.width=canvasWidth;
+
+       setTimeout(analyze, 1000); 
+    }).catch(function(err) { console.error(err); });
+};
+
+reader.readAsArrayBuffer(file);
+});
+
+function analyze() {
+    let valuesSum = 0; 
+    let maxVal = 0;
+
+    analyser.getByteFrequencyData(dataArray);
+
+    for (var i = 0; i < dataArray.length; i++) { 
+        valuesSum += (dataArray[i]);
+        if(dataArray[i] > maxVal){
+            maxVal = dataArray[i];
+        }
+    }
+
+    let averageDb = Math.round(valuesSum / dataArray.length);
+    
+    // Calculate the color for the average value
+    let avgColor;
+    if(averageDb <= 30) { 
+        avgColor ='rgba(0, 255, 0)'; 
+     } else if(averageDb >30 && averageDb <=50){ 
+         avgColor ='rgba(255, 255, 0)'; 
+     } else if(averageDb >50 && averageDb <=70){ 
+         avgColor ='rgba(255, 165, 0)';
+     } else { 
+         avgColor ='rgba(255, 0 ,0)';
+     }
+    
+   document.getElementById("average").innerHTML ="Average dB : "+averageDb+" dB";
+   document.getElementById("average").style.color = avgColor;
+   document.getElementById("average").style.fontSize = '30px';
+   document.getElementById("average").style.letterSpacing = '1px';
+
+   // Calculate the color for the maximum value
+   let maxColor;
+   if(maxVal <=30 ) { 
+       maxColor ='rgba(0, 255, 0)';  
+   } else if(maxVal >30 && maxVal <=50){  
+       maxColor ='rgba(255, 255, 0)';  
+   } else if(maxVal >50 && maxVal <=70){  
+       maxColor ='rgba(255,165 ,0)';
+   } else {   
+       maxColor ='rgba(255 ,0 ,0)';
+   }
+
+   
+document.getElementById("max").innerHTML ="Max dB : "+maxVal+" dB";
+document.getElementById("max").style.color = maxColor;
+document.getElementById("max").style.fontSize = '30px';
+document.getElementById("max").style.letterSpacing = '1px'; 
+
+drawGraph(dataArray);
+}
+
+
+let canvas = document.getElementById('graph');
+let ctx = canvas.getContext('2d');
+
+function drawGraph(data) {
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Set the graph parameters
+    let barWidth = (canvas.width / bufferLength) * 8; // Double the bar width
+    let x = 0;
+
+    for(var i = 0; i < bufferLength; i++) {
+        var barHeight = data[i];
+
+        if(barHeight <=30 ) { 
+            ctx.fillStyle ='rgba(0,255 ,0)';
+        } else if(barHeight >30 && barHeight <=50){ 
+            ctx.fillStyle ='rgba(255 ,255 ,0)';
+        } else if(barHeight >50 && barHeight <=70){ 
+            ctx.fillStyle ='rgba(255 ,165 ,0)';
+        } else { 
+            ctx.fillStyle ='rgba(255 ,0 ,0)';
+        }
+
+      	ctx.fillRect(x,(canvas.height - barHeight),barWidth,(canvas.height));
+      	x += barWidth +  4;
+     }
+}
+
+
+
+
+</script>
+
+</div> <!-- end of container -->
+
+</body>
+</html>
