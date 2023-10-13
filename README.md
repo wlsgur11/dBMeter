@@ -1,2 +1,0 @@
-# dBMeter
-Meter dB
